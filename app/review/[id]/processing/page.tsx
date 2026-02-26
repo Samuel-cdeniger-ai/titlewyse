@@ -6,34 +6,51 @@ import Link from "next/link";
 
 const API_BASE = "http://localhost:8001";
 
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  navy:          "#0A1628",
+  navyLight:     "#162440",
+  gold:          "#C9A84C",
+  parchment:     "#F8F7F4",
+  parchmentDark: "#EEE9E0",
+  ink:           "#1C1C1C",
+  inkMuted:      "#4A4A4A",
+  inkLight:      "#7A7A7A",
+  border:        "#E2DDD6",
+  white:         "#ffffff",
+  success:       "#1A4A2E",
+  error:         "#8B2020",
+  errorBg:       "rgba(139,32,32,0.06)",
+};
+
+// ─── Steps ────────────────────────────────────────────────────────────────────
 const STEPS = [
-  { key: "uploading", label: "Uploading Documents", icon: "📤", desc: "Transferring files to the analysis engine..." },
-  { key: "extracting", label: "Extracting Text", icon: "🔍", desc: "Reading and processing document content..." },
-  { key: "analyzing", label: "Analyzing Title", icon: "⚖️", desc: "Applying Texas title law and TLTA standards..." },
-  { key: "generating", label: "Generating Documents", icon: "📋", desc: "Producing your objection letter and issues summary..." },
+  { key: "uploading",   label: "Uploading Documents",    desc: "Transferring files to the analysis engine." },
+  { key: "extracting",  label: "Extracting Text",         desc: "Reading and processing document content." },
+  { key: "analyzing",   label: "Running Title Analysis",  desc: "Applying Texas title law and TLTA standards." },
+  { key: "generating",  label: "Generating Documents",    desc: "Producing objection letter and issues summary." },
 ];
 
 type StepStatus = "pending" | "active" | "done" | "error";
 
-interface StepState {
-  key: string;
-  status: StepStatus;
-  startTime?: number;
-  endTime?: number;
+function getStepStates(currentStep: number): StepStatus[] {
+  return STEPS.map((_, i) =>
+    i < currentStep ? "done" : i === currentStep ? "active" : "pending"
+  );
 }
 
-function getStepStates(currentStep: number): StepState[] {
-  return STEPS.map((s, i) => ({
-    key: s.key,
-    status:
-      i < currentStep ? "done" : i === currentStep ? "active" : "pending",
-  }));
-}
-
-function formatTimeRemaining(seconds: number): string {
-  if (seconds <= 0) return "almost done";
-  if (seconds < 60) return `~${seconds}s remaining`;
-  return `~${Math.ceil(seconds / 60)}m remaining`;
+// ─── Wordmark ─────────────────────────────────────────────────────────────────
+function Wordmark() {
+  return (
+    <Link href="/" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "5px" }}>
+        <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.25rem", fontWeight: 700, color: C.gold, letterSpacing: "0.14em", textTransform: "uppercase" }}>Title</span>
+        <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.25rem", fontWeight: 400, color: C.gold, letterSpacing: "0.14em", textTransform: "uppercase" }}>Wyse</span>
+      </div>
+      <div style={{ width: "100%", height: "1px", backgroundColor: C.gold, marginTop: "2px", marginBottom: "2px" }} />
+      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(201,168,76,0.65)" }}>AI-Assisted Title Review</span>
+    </Link>
+  );
 }
 
 export default function ProcessingPage() {
@@ -44,379 +61,330 @@ export default function ProcessingPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
-  const [pollCount, setPollCount] = useState(0);
+  const [matterRef, setMatterRef] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
-  // Estimated total time in seconds
   const estimatedTotal = 45;
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsed((prev) => prev + 1);
-    }, 1000);
+    // Load matter ref from session storage
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem(`review_${reviewId}`);
+      if (stored) {
+        const info = JSON.parse(stored);
+        if (info.matterRef) setMatterRef(info.matterRef);
+      }
+    }
+  }, [reviewId]);
+
+  // Elapsed timer — drives visual step progression
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Progress step simulation & actual polling
+  // Visual step advancement based on elapsed time
   useEffect(() => {
-    // Simulate step progression while polling
-    const stepTimings = [3, 8, 20, 35]; // seconds to advance to each step
-
+    if (redirecting) return;
+    const stepTimings = [0, 5, 12, 22];
     if (elapsed >= stepTimings[3] && currentStep < 3) setCurrentStep(3);
     else if (elapsed >= stepTimings[2] && currentStep < 2) setCurrentStep(2);
     else if (elapsed >= stepTimings[1] && currentStep < 1) setCurrentStep(1);
-    else if (elapsed >= stepTimings[0] && currentStep < 0) setCurrentStep(0);
-  }, [elapsed, currentStep]);
+  }, [elapsed, currentStep, redirecting]);
 
-  // Poll backend for status
+  // Poll backend every 3 seconds for analysis status
   useEffect(() => {
-    let active = true;
+    if (redirecting) return;
+    let cancelled = false;
 
-    const poll = async () => {
+    const checkStatus = async () => {
       try {
-        // First, get the review info from sessionStorage
-        const stored =
-          typeof window !== "undefined"
-            ? sessionStorage.getItem(`review_${reviewId}`)
-            : null;
-
-        if (!stored) {
-          // If no stored data, try to generate directly
-          await triggerGenerate();
-          return;
+        const res = await fetch(`${API_BASE}/analyses/${reviewId}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Analysis complete — check if it has output files / full data
+          const hasResults =
+            data.analysis_id || data.output_files || data.analysis || data.risk_summary;
+          if (hasResults && !cancelled) {
+            setRedirecting(true);
+            setCurrentStep(STEPS.length - 1);
+            // Store results in session storage for the results page
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem(`results_${reviewId}`, JSON.stringify(data));
+            }
+            // If output files not yet generated, trigger generation
+            if (!data.output_files || !Object.values(data.output_files).some(Boolean)) {
+              try {
+                const genRes = await fetch(`${API_BASE}/generate`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ analysis_id: reviewId }),
+                });
+                if (genRes.ok) {
+                  const genData = await genRes.json();
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(`results_${reviewId}`, JSON.stringify(genData));
+                  }
+                }
+              } catch { /* non-fatal — results page will handle missing files */ }
+            }
+            setTimeout(() => {
+              if (!cancelled) router.push(`/review/${reviewId}/results`);
+            }, 800);
+          }
         }
-
-        const info = JSON.parse(stored);
-
-        // Check if analysis is done by trying to poll /documents/{id}
-        // The backend may not have a combined status endpoint, so we try /generate
-        if (elapsed > 5 && pollCount === 0) {
-          setPollCount(1);
-          await triggerGenerate(info);
-        }
-      } catch (err) {
-        if (active) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      }
+        // 404 = still processing — visual progression handles it
+      } catch { /* non-fatal polling error */ }
     };
 
-    const triggerGenerate = async (info?: {
-      buyerName: string;
-      propertyAddress: string;
-      intendedUse: string;
-      documentIds: string[];
-    }) => {
-      try {
-        setCurrentStep(3);
-
-        const body: Record<string, unknown> = {
-          review_id: reviewId,
-        };
-
-        if (info) {
-          body.buyer_name = info.buyerName;
-          body.property_address = info.propertyAddress;
-          body.intended_use = info.intendedUse;
-          body.document_ids = info.documentIds;
-        }
-
-        const res = await fetch(`${API_BASE}/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Generation failed: ${errText}`);
-        }
-
-        const data = await res.json();
-
-        // Store results for the results page
-        if (typeof window !== "undefined") {
-          const storedKey = `results_${reviewId}`;
-          sessionStorage.setItem(storedKey, JSON.stringify(data));
-        }
-
-        if (active) {
-          // Small delay so the user sees the "Generating Documents" step complete
-          setTimeout(() => {
-            router.push(`/review/${reviewId}/results`);
-          }, 1200);
-        }
-      } catch (err) {
-        if (active) {
-          throw err;
-        }
-      }
-    };
-
-    if (elapsed === 6) {
-      poll();
-    }
+    const interval = setInterval(checkStatus, 3000);
+    // Also check immediately on mount
+    checkStatus();
 
     return () => {
-      active = false;
+      cancelled = true;
+      clearInterval(interval);
     };
-  }, [elapsed, reviewId, pollCount, router]);
+  }, [reviewId, router, redirecting]);
 
   const stepStates = getStepStates(currentStep);
-  const remaining = Math.max(0, estimatedTotal - elapsed);
-  const progressPct = Math.min(98, (elapsed / estimatedTotal) * 100);
+  const progressPct = Math.min(97, (elapsed / estimatedTotal) * 100);
+  const displayId = matterRef || reviewId;
 
+  // ── Error state ────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div style={{ minHeight: "100vh", backgroundColor: "#f8f9fb" }}>
-        <nav style={navStyle}>
-          <Link href="/" style={logoStyle}>TitleWyse</Link>
-        </nav>
-        <div
-          style={{
-            maxWidth: "540px",
-            margin: "4rem auto",
-            padding: "2rem",
-            backgroundColor: "white",
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⚠️</div>
-          <h2
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "700",
-              color: "#991b1b",
-              marginBottom: "0.75rem",
-            }}
-          >
+      <div style={{ minHeight: "100vh", backgroundColor: C.parchment }}>
+        <nav style={navStyle}><Wordmark /></nav>
+        <div style={{
+          maxWidth: "540px",
+          margin: "6rem auto",
+          padding: "3rem",
+          backgroundColor: C.white,
+          border: `1px solid ${C.border}`,
+          textAlign: "center",
+        }}>
+          <h2 style={{
+            fontFamily: "'Playfair Display', Georgia, serif",
+            fontSize: "1.5rem",
+            fontWeight: 400,
+            color: C.error,
+            marginBottom: "1rem",
+          }}>
             Analysis Error
           </h2>
-          <p
-            style={{
-              color: "#64748b",
-              fontFamily: "sans-serif",
-              fontSize: "0.9375rem",
-              marginBottom: "1.5rem",
-              lineHeight: "1.6",
-            }}
-          >
+          <div style={{ width: "48px", height: "1px", backgroundColor: C.error, margin: "0 auto 1.5rem" }} />
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 300,
+            fontSize: "0.9375rem",
+            color: C.inkMuted,
+            marginBottom: "2rem",
+            lineHeight: 1.7,
+          }}>
             {error}
           </p>
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-            <Link
-              href="/review/new"
-              style={{
-                backgroundColor: "#0a1628",
-                color: "white",
-                padding: "10px 24px",
-                borderRadius: "6px",
-                textDecoration: "none",
-                fontFamily: "sans-serif",
-                fontSize: "0.9375rem",
-                fontWeight: "600",
-              }}
-            >
-              Try Again
-            </Link>
-          </div>
+          <Link href="/review/new" style={{
+            display: "inline-block",
+            backgroundColor: C.navy,
+            color: C.white,
+            padding: "12px 28px",
+            textDecoration: "none",
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 500,
+            fontSize: "0.9375rem",
+          }}>
+            Try Again
+          </Link>
         </div>
       </div>
     );
   }
 
+  // ── Main processing view ───────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8f9fb" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: C.parchment }}>
       <nav style={navStyle}>
-        <Link href="/" style={logoStyle}>TitleWyse</Link>
-        <span style={{ color: "#94a3b8", fontFamily: "sans-serif", fontSize: "0.875rem" }}>
-          Analyzing…
+        <Wordmark />
+        <span style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: "0.6875rem",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "rgba(201,168,76,0.55)",
+        }}>
+          Analyzing
         </span>
       </nav>
 
-      <div
-        style={{
-          maxWidth: "560px",
-          margin: "4rem auto",
-          padding: "0 1.5rem",
-        }}
-      >
-        {/* Main card */}
-        <div
-          style={{
-            backgroundColor: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "12px",
-            padding: "2.5rem 2rem",
-            textAlign: "center",
-          }}
-        >
-          {/* Spinner */}
-          <div
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              border: "4px solid #e2e8f0",
-              borderTopColor: "#c9a84c",
-              animation: "spin 1s linear infinite",
-              margin: "0 auto 1.5rem",
-            }}
-          />
+      <div style={{
+        maxWidth: "560px",
+        margin: "0 auto",
+        padding: "8rem 2rem",
+        textAlign: "center",
+      }}>
+        {/* Matter reference */}
+        <p style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: "0.6875rem",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: C.gold,
+          marginBottom: "1.25rem",
+        }}>
+          {displayId}
+        </p>
 
-          <h1
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: "700",
-              color: "#0a1628",
-              marginBottom: "0.5rem",
-            }}
-          >
-            Analyzing Your Title Documents
-          </h1>
-          <p
-            style={{
-              color: "#64748b",
-              fontFamily: "sans-serif",
-              fontSize: "0.9375rem",
-              marginBottom: "2rem",
-            }}
-          >
-            {formatTimeRemaining(remaining)}
-          </p>
+        {/* Headline */}
+        <h1 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: "2rem",
+          fontWeight: 400,
+          color: C.navy,
+          lineHeight: 1.25,
+          marginBottom: "0",
+        }}>
+          Analyzing Matter
+        </h1>
 
-          {/* Progress bar */}
-          <div
-            style={{
-              height: "6px",
-              backgroundColor: "#f1f5f9",
-              borderRadius: "999px",
-              overflow: "hidden",
-              marginBottom: "2rem",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                backgroundColor: "#c9a84c",
-                borderRadius: "999px",
-                width: `${progressPct}%`,
-                transition: "width 1s linear",
-              }}
-            />
-          </div>
+        {/* Gold rule */}
+        <div style={{
+          width: "60px",
+          height: "1px",
+          backgroundColor: C.gold,
+          margin: "1.75rem auto",
+        }} />
 
-          {/* Steps */}
-          <div style={{ textAlign: "left" }}>
-            {STEPS.map((step, i) => {
-              const state = stepStates[i];
-              return (
-                <div
-                  key={step.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "1rem",
-                    padding: "0.875rem 0",
-                    borderBottom:
-                      i < STEPS.length - 1 ? "1px solid #f1f5f9" : "none",
-                    opacity: state.status === "pending" ? 0.4 : 1,
-                  }}
-                >
-                  {/* Step indicator */}
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      borderRadius: "50%",
-                      backgroundColor:
-                        state.status === "done"
-                          ? "#16a34a"
-                          : state.status === "active"
-                          ? "#0a1628"
-                          : "#f1f5f9",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      fontSize: "0.9375rem",
-                    }}
-                  >
-                    {state.status === "done" ? (
-                      <span style={{ color: "white", fontSize: "0.875rem" }}>✓</span>
-                    ) : state.status === "active" ? (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: "16px",
-                          height: "16px",
-                          border: "2px solid white",
-                          borderTopColor: "#c9a84c",
-                          borderRadius: "50%",
-                          animation: "spin 0.8s linear infinite",
-                        }}
-                      />
-                    ) : (
-                      <span style={{ color: "#94a3b8", fontSize: "0.75rem", fontFamily: "sans-serif" }}>
-                        {i + 1}
-                      </span>
-                    )}
-                  </div>
-
-                  <div>
-                    <p
-                      style={{
-                        fontFamily: "sans-serif",
-                        fontWeight: "700",
-                        fontSize: "0.9375rem",
-                        color:
-                          state.status === "active"
-                            ? "#0a1628"
-                            : state.status === "done"
-                            ? "#16a34a"
-                            : "#94a3b8",
-                        marginBottom: "0.125rem",
-                      }}
-                    >
-                      {step.icon} {step.label}
-                    </p>
-                    {state.status === "active" && (
-                      <p
-                        style={{
-                          fontFamily: "sans-serif",
-                          fontSize: "0.8125rem",
-                          color: "#64748b",
-                        }}
-                      >
-                        {step.desc}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* Progress bar */}
+        <div style={{
+          height: "2px",
+          backgroundColor: C.border,
+          marginBottom: "3.5rem",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%",
+            backgroundColor: C.gold,
+            width: `${progressPct}%`,
+            transition: "width 1s linear",
+          }} />
         </div>
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "#94a3b8",
-            fontFamily: "sans-serif",
-            fontSize: "0.8125rem",
-            marginTop: "1.5rem",
-            lineHeight: "1.6",
-          }}
-        >
-          Do not close this page. You will be redirected automatically when your
-          documents are ready.
+        {/* Steps */}
+        <div style={{ textAlign: "left" }}>
+          {STEPS.map((step, i) => {
+            const status = stepStates[i];
+            return (
+              <div
+                key={step.key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1.25rem",
+                  padding: "1rem 0",
+                  borderBottom: i < STEPS.length - 1 ? `1px solid ${C.parchmentDark}` : "none",
+                  opacity: status === "pending" ? 0.38 : 1,
+                  transition: "opacity 400ms ease",
+                }}
+              >
+                {/* Status indicator */}
+                <div style={{ flexShrink: 0, width: "18px", display: "flex", justifyContent: "center" }}>
+                  {status === "done" && (
+                    <span style={{ color: C.gold, fontSize: "0.875rem", fontWeight: 700 }}>✓</span>
+                  )}
+                  {status === "active" && (
+                    <div style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: C.gold,
+                      animation: "pulse-gold 2s ease-in-out infinite",
+                    }} />
+                  )}
+                  {status === "pending" && (
+                    <div style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      border: `1px solid ${C.inkLight}`,
+                    }} />
+                  )}
+                </div>
+
+                {/* Label */}
+                <div style={{ flex: 1 }}>
+                  <span style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: "0.75rem",
+                    letterSpacing: "0.08em",
+                    color: status === "done" ? C.gold : status === "active" ? C.navy : C.inkLight,
+                    fontWeight: status === "active" ? 500 : 300,
+                  }}>
+                    {step.label}
+                  </span>
+                </div>
+
+                {/* Status text */}
+                <div style={{ flexShrink: 0, minWidth: "100px", textAlign: "right" }}>
+                  {status === "done" && (
+                    <span style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.625rem",
+                      letterSpacing: "0.1em",
+                      color: C.gold,
+                      textTransform: "uppercase",
+                    }}>
+                      Complete
+                    </span>
+                  )}
+                  {status === "active" && (
+                    <span style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 300,
+                      fontStyle: "italic",
+                      fontSize: "0.75rem",
+                      color: C.inkMuted,
+                    }}>
+                      In progress…
+                    </span>
+                  )}
+                  {status === "pending" && (
+                    <span style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "0.625rem",
+                      letterSpacing: "0.1em",
+                      color: C.inkLight,
+                      textTransform: "uppercase",
+                    }}>
+                      Pending
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Estimated time note */}
+        <p style={{
+          fontFamily: "'Inter', sans-serif",
+          fontWeight: 300,
+          fontStyle: "italic",
+          fontSize: "0.8125rem",
+          color: C.inkLight,
+          marginTop: "3rem",
+          lineHeight: 1.7,
+        }}>
+          Title analysis typically completes in 30–60 seconds.<br />
+          Do not close this page.
         </p>
       </div>
 
       <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-gold {
+          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
+          50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(201,168,76,0); }
         }
       `}</style>
     </div>
@@ -424,18 +392,11 @@ export default function ProcessingPage() {
 }
 
 const navStyle: React.CSSProperties = {
-  backgroundColor: "#0a1628",
-  borderBottom: "1px solid #1a3a6b",
-  padding: "0 2rem",
+  backgroundColor: "#0A1628",
+  padding: "0 3rem",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  height: "60px",
-};
-
-const logoStyle: React.CSSProperties = {
-  color: "#c9a84c",
-  textDecoration: "none",
-  fontSize: "1.25rem",
-  fontWeight: "700",
+  height: "72px",
+  borderBottom: "1px solid #162440",
 };

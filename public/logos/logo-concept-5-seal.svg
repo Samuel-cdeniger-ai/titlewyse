@@ -1,0 +1,96 @@
+<!-- TitleWyse Logo Concept 5: Legal Seal Style -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="220" height="220">
+  <defs>
+    <style>
+      .c5-bg { fill: #0A1628; }
+    </style>
+
+    <!-- Arc paths for text-on-path -->
+    <!-- Top arc: large enough to hold "TITLEWYSE" around the top -->
+    <path id="c5-top-arc"
+      d="M 30,110 A 80,80 0 1,1 190,110"
+      fill="none"/>
+
+    <!-- Bottom arc: for "TEXAS · TITLE · INTELLIGENCE" -->
+    <path id="c5-bottom-arc"
+      d="M 36,118 A 74,74 0 0,0 184,118"
+      fill="none"/>
+  </defs>
+
+  <!-- Background -->
+  <rect width="220" height="220" class="c5-bg"/>
+
+  <!-- ── Seal Rings ── -->
+  <!-- Outer ring — double line effect -->
+  <circle cx="110" cy="110" r="96" fill="none" stroke="#C9A84C" stroke-width="1.5"/>
+  <circle cx="110" cy="110" r="90" fill="none" stroke="#C9A84C" stroke-width="0.6"/>
+
+  <!-- Inner ring -->
+  <circle cx="110" cy="110" r="72" fill="none" stroke="#C9A84C" stroke-width="0.8"/>
+
+  <!-- Inner fill — very slight tint -->
+  <circle cx="110" cy="110" r="71" fill="#0D1E36"/>
+
+  <!-- ── Arc Text: TITLEWYSE around top ── -->
+  <text font-family="'DM Mono', 'Courier New', monospace"
+        font-size="11.5"
+        font-weight="500"
+        fill="#F8F7F4"
+        letter-spacing="5">
+    <textPath href="#c5-top-arc" startOffset="50%" text-anchor="middle">TITLEWYSE</textPath>
+  </text>
+
+  <!-- ── Arc Text: TEXAS · TITLE · INTELLIGENCE around bottom ── -->
+  <text font-family="'DM Mono', 'Courier New', monospace"
+        font-size="7.5"
+        font-weight="400"
+        fill="#C9A84C"
+        letter-spacing="2.2"
+        opacity="0.85">
+    <textPath href="#c5-bottom-arc" startOffset="50%" text-anchor="middle">TEXAS · TITLE · INTELLIGENCE</textPath>
+  </text>
+
+  <!-- ── Dot separators at 9 and 3 o'clock ── -->
+  <circle cx="14" cy="110" r="1.5" fill="#C9A84C" opacity="0.6"/>
+  <circle cx="206" cy="110" r="1.5" fill="#C9A84C" opacity="0.6"/>
+
+  <!-- ── Center Motif: Stylized "TW" monogram ── -->
+  <!-- The "T" — drawn as clean geometric paths in gold -->
+  <!-- T horizontal bar -->
+  <rect x="74" y="78" width="32" height="3" fill="#C9A84C"/>
+  <!-- T vertical stroke -->
+  <rect x="88" y="81" width="4" height="26" fill="#C9A84C"/>
+
+  <!-- The "W" — drawn as a geometric W to the right, in parchment/white -->
+  <!-- W: five downward strokes forming the W shape -->
+  <!-- Left outer leg -->
+  <polygon points="112,78 116,78 119,104 115,104" fill="#F8F7F4"/>
+  <!-- Left inner valley -->
+  <polygon points="115,104 119,104 122,90 118,90" fill="#F8F7F4"/>
+  <!-- Center peak -->
+  <polygon points="118,90 122,90 125,104 121,104" fill="#F8F7F4"/>
+  <!-- Right inner valley -->
+  <polygon points="121,104 125,104 128,78 132,78" fill="#F8F7F4"/>
+  <!-- Right outer leg -->
+  <polygon points="128,78 132,78 135,104 131,104" fill="#F8F7F4"/>
+
+  <!-- Thin gold line beneath TW -->
+  <rect x="74" y="109" width="72" height="0.75" fill="#C9A84C" opacity="0.6"/>
+
+  <!-- Small "EST." text below line -->
+  <text x="110" y="122"
+        font-family="'DM Mono', 'Courier New', monospace"
+        font-size="7"
+        fill="#C9A84C"
+        text-anchor="middle"
+        letter-spacing="0.3em"
+        opacity="0.7">EST.</text>
+
+  <!-- Horizontal ornament lines flanking EST -->
+  <rect x="74" y="121" width="22" height="0.5" fill="#C9A84C" opacity="0.35"/>
+  <rect x="124" y="121" width="22" height="0.5" fill="#C9A84C" opacity="0.35"/>
+
+  <!-- Small star/dot ornaments -->
+  <circle cx="74" cy="121" r="1.5" fill="#C9A84C" opacity="0.5"/>
+  <circle cx="146" cy="121" r="1.5" fill="#C9A84C" opacity="0.5"/>
+</svg>

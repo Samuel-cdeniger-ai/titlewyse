@@ -6,7 +6,26 @@ import Link from "next/link";
 
 const API_BASE = "http://localhost:8001";
 
-type DocType = "Commitment" | "Exception" | "Survey" | "Other";
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  navy:          "#0A1628",
+  navyLight:     "#162440",
+  gold:          "#C9A84C",
+  goldLight:     "#E8CC7A",
+  gold40:        "rgba(201,168,76,0.40)",
+  parchment:     "#F8F7F4",
+  parchmentDark: "#EEE9E0",
+  ink:           "#1C1C1C",
+  inkMuted:      "#4A4A4A",
+  inkLight:      "#7A7A7A",
+  border:        "#E2DDD6",
+  white:         "#ffffff",
+  error:         "#8B2020",
+  errorBg:       "rgba(139,32,32,0.06)",
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type DocType = "COMMITMENT" | "EXCEPTION" | "SURVEY" | "PLAT" | "OTHER";
 
 interface UploadedFile {
   id: string;
@@ -19,24 +38,49 @@ interface UploadedFile {
 
 function classifyFile(name: string): DocType {
   const lower = name.toLowerCase();
-  if (lower.includes("commitment") || lower.includes("commit") || lower.includes("title")) return "Commitment";
-  if (lower.includes("exception") || lower.includes("schedule") || lower.includes("b-ii") || lower.includes("bii")) return "Exception";
-  if (lower.includes("survey") || lower.includes("plat") || lower.includes("metes")) return "Survey";
-  return "Other";
+  if (lower.includes("commitment") || lower.includes("commit") || lower.includes("title")) return "COMMITMENT";
+  if (lower.includes("exception") || lower.includes("schedule") || lower.includes("b-ii") || lower.includes("bii")) return "EXCEPTION";
+  if (lower.includes("plat")) return "PLAT";
+  if (lower.includes("survey") || lower.includes("metes")) return "SURVEY";
+  return "OTHER";
 }
 
-const docTypeBadgeColors: Record<DocType, { bg: string; text: string }> = {
-  Commitment: { bg: "#dbeafe", text: "#1e40af" },
-  Exception: { bg: "#fef3c7", text: "#92400e" },
-  Survey: { bg: "#d1fae5", text: "#065f46" },
-  Other: { bg: "#f3f4f6", text: "#374151" },
+// DocType → API value mapping
+const docTypeApiMap: Record<DocType, string> = {
+  COMMITMENT: "Commitment",
+  EXCEPTION: "Exception",
+  SURVEY: "Survey",
+  PLAT: "Survey",
+  OTHER: "Other",
 };
 
-export default function NewReviewPage() {
+// ─── Matter reference generator ───────────────────────────────────────────────
+function generateMatterRef(): string {
+  const year = new Date().getFullYear();
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `TW-${year}-${num}`;
+}
+
+// ─── Wordmark ─────────────────────────────────────────────────────────────────
+function Wordmark() {
+  return (
+    <Link href="/" style={{ textDecoration: "none", display: "inline-flex", flexDirection: "column", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "5px" }}>
+        <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.25rem", fontWeight: 700, color: C.gold, letterSpacing: "0.14em", textTransform: "uppercase" }}>Title</span>
+        <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.25rem", fontWeight: 400, color: C.gold, letterSpacing: "0.14em", textTransform: "uppercase" }}>Wyse</span>
+      </div>
+      <div style={{ width: "100%", height: "1px", backgroundColor: C.gold, marginTop: "2px", marginBottom: "2px" }} />
+      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.5rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(201,168,76,0.65)" }}>AI-Assisted Title Review</span>
+    </Link>
+  );
+}
+
+export default function NewMatterPage() {
   const router = useRouter();
+  const [matterRef] = useState(generateMatterRef);
   const [buyerName, setBuyerName] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
-  const [intendedUse, setIntendedUse] = useState("Residential");
+  const [intendedUse, setIntendedUse] = useState("Commercial");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +90,7 @@ export default function NewReviewPage() {
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles);
     const toAdd: UploadedFile[] = arr
-      .filter((f) => files.length + arr.indexOf(f) < 50)
+      .filter((_, idx) => files.length + idx < 50)
       .map((f) => ({
         id: `${f.name}-${Date.now()}-${Math.random()}`,
         file: f,
@@ -56,34 +100,24 @@ export default function NewReviewPage() {
     setFiles((prev) => [...prev, ...toAdd]);
   }, [files.length]);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      addFiles(e.dataTransfer.files);
-    },
-    [addFiles]
-  );
-
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
-  };
+    setIsDragging(false);
+    addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
-
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) addFiles(e.target.files);
     e.target.value = "";
   };
 
-  const updateDocType = (id: string, docType: DocType) => {
+  const updateDocType = (id: string, docType: DocType) =>
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, docType } : f)));
-  };
 
-  const removeFile = (id: string) => {
+  const removeFile = (id: string) =>
     setFiles((prev) => prev.filter((f) => f.id !== id));
-  };
 
   const handleSubmit = async () => {
     if (!buyerName.trim() || !propertyAddress.trim() || files.length === 0) return;
@@ -91,46 +125,27 @@ export default function NewReviewPage() {
     setSubmitError("");
 
     try {
-      // Upload all files
       const uploadedIds: string[] = [];
 
       for (const uf of files) {
         const formData = new FormData();
         formData.append("file", uf.file);
-        formData.append("doc_type_hint", uf.docType.toLowerCase());
+        formData.append("doc_type_hint", docTypeApiMap[uf.docType].toLowerCase());
 
-        setFiles((prev) =>
-          prev.map((f) => (f.id === uf.id ? { ...f, status: "uploading" } : f))
-        );
+        setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "uploading" } : f)));
 
-        const res = await fetch(`${API_BASE}/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
+        const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
         if (!res.ok) {
           const err = await res.text();
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uf.id ? { ...f, status: "error", error: err } : f
-            )
-          );
+          setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "error", error: err } : f)));
           throw new Error(`Upload failed for ${uf.file.name}: ${err}`);
         }
 
         const data = await res.json();
         uploadedIds.push(data.document_id || data.id || data.document?.id);
-
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === uf.id
-              ? { ...f, status: "done", uploadedId: data.document_id || data.id }
-              : f
-          )
-        );
+        setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "done", uploadedId: data.document_id || data.id } : f)));
       }
 
-      // Start analysis
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,28 +157,19 @@ export default function NewReviewPage() {
         }),
       });
 
-      if (!analyzeRes.ok) {
-        throw new Error(`Analysis request failed: ${analyzeRes.statusText}`);
-      }
+      if (!analyzeRes.ok) throw new Error(`Analysis request failed: ${analyzeRes.statusText}`);
 
       const analyzeData = await analyzeRes.json();
-      const reviewId =
-        analyzeData.review_id ||
-        analyzeData.id ||
-        analyzeData.job_id ||
-        uploadedIds[0];
+      const reviewId = analyzeData.analysis_id || analyzeData.review_id || analyzeData.id || analyzeData.job_id || uploadedIds[0];
 
-      // Store matter info for results page
       if (typeof window !== "undefined") {
-        sessionStorage.setItem(
-          `review_${reviewId}`,
-          JSON.stringify({
-            buyerName,
-            propertyAddress,
-            intendedUse,
-            documentIds: uploadedIds.filter(Boolean),
-          })
-        );
+        sessionStorage.setItem(`review_${reviewId}`, JSON.stringify({
+          buyerName,
+          propertyAddress,
+          intendedUse,
+          matterRef,
+          documentIds: uploadedIds.filter(Boolean),
+        }));
       }
 
       router.push(`/review/${reviewId}/processing`);
@@ -173,129 +179,111 @@ export default function NewReviewPage() {
     }
   };
 
-  const canSubmit =
-    buyerName.trim().length > 0 &&
-    propertyAddress.trim().length > 0 &&
-    files.length > 0 &&
-    !isSubmitting;
+  const canSubmit = buyerName.trim().length > 0 && propertyAddress.trim().length > 0 && files.length > 0 && !isSubmitting;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8f9fb" }}>
-      {/* Nav */}
-      <nav
-        style={{
-          backgroundColor: "#0a1628",
-          borderBottom: "1px solid #1a3a6b",
-          padding: "0 2rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: "60px",
-        }}
-      >
-        <Link
-          href="/"
-          style={{
-            color: "#c9a84c",
-            textDecoration: "none",
-            fontSize: "1.25rem",
-            fontWeight: "700",
-          }}
-        >
-          TitleWyse
-        </Link>
-        <span
-          style={{
-            color: "#94a3b8",
-            fontSize: "0.875rem",
-            fontFamily: "sans-serif",
-          }}
-        >
-          New Title Review
+    <div style={{ minHeight: "100vh", backgroundColor: C.parchment, color: C.ink }}>
+
+      {/* ── Navigation ─────────────────────────────────────────────────── */}
+      <nav style={{
+        backgroundColor: C.navy,
+        padding: "0 3rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        height: "72px",
+        borderBottom: `1px solid ${C.navyLight}`,
+      }}>
+        <Wordmark />
+        <span style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: "0.6875rem",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "rgba(201,168,76,0.55)",
+        }}>
+          New Matter
         </span>
       </nav>
 
-      <div style={{ maxWidth: "780px", margin: "0 auto", padding: "2rem 1.5rem 4rem" }}>
-        {/* Header */}
-        <div style={{ marginBottom: "2rem" }}>
-          <h1
-            style={{
-              fontSize: "1.75rem",
-              fontWeight: "700",
-              color: "#0a1628",
-              marginBottom: "0.5rem",
-            }}
-          >
-            New Title Review
+      <div style={{ maxWidth: "820px", margin: "0 auto", padding: "4rem 2rem 6rem" }}>
+
+        {/* ── Page Header ──────────────────────────────────────────────── */}
+        <div style={{ marginBottom: "3rem" }}>
+          <h1 style={{
+            fontFamily: "'Playfair Display', Georgia, serif",
+            fontSize: "2.5rem",
+            fontWeight: 400,
+            color: C.navy,
+            marginBottom: "0.875rem",
+            lineHeight: 1.2,
+          }}>
+            Open a New Matter
           </h1>
-          <p
-            style={{
-              color: "#64748b",
-              fontFamily: "sans-serif",
-              fontSize: "0.9375rem",
-            }}
-          >
-            Enter matter details and upload your title documents below.
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 300,
+            fontSize: "1rem",
+            color: C.inkMuted,
+            lineHeight: 1.7,
+          }}>
+            Upload your title commitment, exception documents, and survey for AI-assisted review.
           </p>
         </div>
 
-        {/* Matter Info Card */}
-        <div
-          style={{
-            backgroundColor: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            padding: "1.75rem",
-            marginBottom: "1.5rem",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "1rem",
-              fontWeight: "700",
-              color: "#0a1628",
-              marginBottom: "1.25rem",
-              fontFamily: "sans-serif",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              fontSize: "0.8125rem",
-              borderBottom: "2px solid #c9a84c",
-              paddingBottom: "0.5rem",
-              display: "inline-block",
-            }}
-          >
-            Matter Information
-          </h2>
+        {/* ── Matter Information ───────────────────────────────────────── */}
+        <div style={cardStyle}>
+          <SectionLabel>Matter Information</SectionLabel>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "1.25rem",
-            }}
-          >
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "1.75rem",
+            marginTop: "1.75rem",
+          }}>
+            {/* Matter Reference — read-only */}
             <div>
-              <label style={labelStyle}>Buyer Name *</label>
+              <FieldLabel>Matter Reference</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                backgroundColor: C.parchmentDark,
+                border: `1px solid ${C.border}`,
+                color: C.gold,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: "0.9375rem",
+                letterSpacing: "0.06em",
+              }}>
+                {matterRef}
+              </div>
+            </div>
+
+            {/* Buyer Name */}
+            <div>
+              <FieldLabel>Purchaser / Buyer *</FieldLabel>
               <input
                 type="text"
                 value={buyerName}
                 onChange={(e) => setBuyerName(e.target.value)}
-                placeholder="e.g. Acme Holdings, LLC"
+                placeholder="Acme Holdings, LLC"
                 style={inputStyle}
               />
             </div>
-            <div>
-              <label style={labelStyle}>Property Address *</label>
+
+            {/* Property Address */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <FieldLabel>Property Address *</FieldLabel>
               <input
                 type="text"
                 value={propertyAddress}
                 onChange={(e) => setPropertyAddress(e.target.value)}
-                placeholder="123 Main St, Dallas, TX 75201"
+                placeholder="123 Main Street, Dallas, TX 75201"
                 style={inputStyle}
               />
             </div>
+
+            {/* Intended Use */}
             <div>
-              <label style={labelStyle}>Intended Use</label>
+              <FieldLabel>Intended Use</FieldLabel>
               <select
                 value={intendedUse}
                 onChange={(e) => setIntendedUse(e.target.value)}
@@ -305,29 +293,16 @@ export default function NewReviewPage() {
                 <option>Residential</option>
                 <option>Mixed-Use</option>
                 <option>Investment</option>
+                <option>Industrial</option>
+                <option>Agricultural</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Upload Zone */}
-        <div
-          style={{
-            backgroundColor: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            padding: "1.75rem",
-            marginBottom: "1.5rem",
-          }}
-        >
-          <h2
-            style={{
-              ...sectionHeadingStyle,
-              marginBottom: "1.25rem",
-            }}
-          >
-            Documents
-          </h2>
+        {/* ── Document Upload ──────────────────────────────────────────── */}
+        <div style={{ ...cardStyle, marginTop: "2rem" }}>
+          <SectionLabel>Documents</SectionLabel>
 
           {/* Drop zone */}
           <div
@@ -336,35 +311,46 @@ export default function NewReviewPage() {
             onDragLeave={handleDragLeave}
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: `2px dashed ${isDragging ? "#c9a84c" : "#cbd5e1"}`,
-              borderRadius: "8px",
-              padding: "2.5rem 2rem",
+              border: `2px dashed ${isDragging ? C.gold : C.gold40}`,
+              padding: "3.5rem 2rem",
               textAlign: "center",
               cursor: "pointer",
-              backgroundColor: isDragging ? "#fffbeb" : "#f8fafc",
-              marginBottom: files.length > 0 ? "1.5rem" : "0",
+              backgroundColor: isDragging ? C.parchmentDark : C.parchment,
+              marginTop: "1.75rem",
+              marginBottom: files.length > 0 ? "2rem" : "0",
+              transition: "border-color 160ms ease, background-color 160ms ease",
             }}
           >
-            <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📁</div>
-            <p
-              style={{
-                color: "#0a1628",
-                fontFamily: "sans-serif",
-                fontSize: "0.9375rem",
-                fontWeight: "600",
-                marginBottom: "0.375rem",
-              }}
+            {/* Upload SVG */}
+            <svg
+              width="32" height="32"
+              viewBox="0 0 24 24" fill="none"
+              stroke={C.gold} strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{ margin: "0 auto 1.25rem", display: "block" }}
             >
-              Drag & drop files here, or click to browse
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+
+            <p style={{
+              fontFamily: "'Playfair Display', Georgia, serif",
+              fontStyle: "italic",
+              fontSize: "1.125rem",
+              fontWeight: 400,
+              color: C.navy,
+              marginBottom: "0.5rem",
+            }}>
+              Drop documents here
             </p>
-            <p
-              style={{
-                color: "#94a3b8",
-                fontFamily: "sans-serif",
-                fontSize: "0.8125rem",
-              }}
-            >
-              Accepts PDF, JPEG, PNG, TIFF · Up to 50 files
+            <p style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 300,
+              fontSize: "0.8125rem",
+              color: C.inkLight,
+            }}>
+              PDF, JPEG, PNG, TIFF — up to 50 files
             </p>
           </div>
 
@@ -380,276 +366,304 @@ export default function NewReviewPage() {
           {/* File list */}
           {files.length > 0 && (
             <div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto auto auto",
-                  gap: "0.75rem",
-                  alignItems: "center",
-                  padding: "0.5rem 0",
-                  borderBottom: "1px solid #e2e8f0",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <span style={colHeaderStyle}>File</span>
-                <span style={colHeaderStyle}>Size</span>
-                <span style={colHeaderStyle}>Type</span>
-                <span style={colHeaderStyle}>Status</span>
+              {/* Column headers */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 80px 140px 60px",
+                gap: "0.75rem",
+                padding: "0.5rem 0",
+                borderBottom: `1px solid ${C.border}`,
+                marginBottom: "0.25rem",
+              }}>
+                {["Document", "Size", "Type", ""].map((h) => (
+                  <span key={h} style={colHeaderStyle}>{h}</span>
+                ))}
               </div>
 
-              {files.map((uf) => {
-                const badge = docTypeBadgeColors[uf.docType];
-                return (
-                  <div
-                    key={uf.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto auto auto",
-                      gap: "0.75rem",
-                      alignItems: "center",
-                      padding: "0.625rem 0",
-                      borderBottom: "1px solid #f1f5f9",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <span style={{ fontSize: "1rem" }}>
-                        {uf.file.name.endsWith(".pdf") ? "📄" : "🖼️"}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: "sans-serif",
-                          fontSize: "0.875rem",
-                          color: "#0f172a",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {uf.file.name}
-                      </span>
-                    </div>
+              {files.map((uf) => (
+                <FileRow
+                  key={uf.id}
+                  uf={uf}
+                  onTypeChange={updateDocType}
+                  onRemove={removeFile}
+                />
+              ))}
 
-                    <span
-                      style={{
-                        fontFamily: "sans-serif",
-                        fontSize: "0.8125rem",
-                        color: "#64748b",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {(uf.file.size / 1024).toFixed(0)} KB
-                    </span>
-
-                    <select
-                      value={uf.docType}
-                      onChange={(e) => updateDocType(uf.id, e.target.value as DocType)}
-                      style={{
-                        backgroundColor: badge.bg,
-                        color: badge.text,
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "4px 8px",
-                        fontSize: "0.75rem",
-                        fontFamily: "sans-serif",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option>Commitment</option>
-                      <option>Exception</option>
-                      <option>Survey</option>
-                      <option>Other</option>
-                    </select>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      {uf.status === "uploading" && (
-                        <span style={{ fontSize: "0.75rem", color: "#3b82f6", fontFamily: "sans-serif" }}>
-                          ↑ uploading
-                        </span>
-                      )}
-                      {uf.status === "done" && (
-                        <span style={{ fontSize: "0.875rem" }}>✅</span>
-                      )}
-                      {uf.status === "error" && (
-                        <span style={{ fontSize: "0.75rem", color: "#dc2626", fontFamily: "sans-serif" }}>
-                          ⚠ {uf.error?.slice(0, 30)}
-                        </span>
-                      )}
-                      {uf.status === "pending" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFile(uf.id);
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "#94a3b8",
-                            fontSize: "1rem",
-                            padding: "2px",
-                          }}
-                          title="Remove"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              <p
-                style={{
-                  fontFamily: "sans-serif",
-                  fontSize: "0.8125rem",
-                  color: "#94a3b8",
-                  marginTop: "0.75rem",
-                }}
-              >
-                {files.length} file{files.length !== 1 ? "s" : ""} selected
+              <p style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: "0.6875rem",
+                letterSpacing: "0.08em",
+                color: C.inkLight,
+                marginTop: "1rem",
+              }}>
+                {files.length} {files.length === 1 ? "document" : "documents"} queued
               </p>
             </div>
           )}
         </div>
 
-        {/* Error */}
+        {/* ── Error ────────────────────────────────────────────────────── */}
         {submitError && (
-          <div
-            style={{
-              backgroundColor: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              padding: "0.875rem 1rem",
-              marginBottom: "1.25rem",
-              fontFamily: "sans-serif",
-              fontSize: "0.875rem",
-              color: "#991b1b",
-            }}
-          >
-            ⚠ {submitError}
+          <div style={{
+            backgroundColor: C.errorBg,
+            border: `1px solid ${C.error}`,
+            padding: "1rem 1.25rem",
+            marginTop: "1.5rem",
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 400,
+            fontSize: "0.875rem",
+            color: C.error,
+          }}>
+            {submitError}
           </div>
         )}
 
-        {/* Submit */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        {/* ── Submit ───────────────────────────────────────────────────── */}
+        <div style={{ marginTop: "2.5rem" }}>
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
             style={{
-              backgroundColor: canSubmit ? "#0a1628" : "#94a3b8",
-              color: "white",
+              width: "100%",
+              backgroundColor: canSubmit ? C.navy : C.inkLight,
+              color: canSubmit ? C.white : "rgba(255,255,255,0.5)",
               border: "none",
-              borderRadius: "6px",
-              padding: "14px 36px",
+              padding: "18px 36px",
               fontSize: "1rem",
-              fontFamily: "sans-serif",
-              fontWeight: "700",
+              fontFamily: "'Playfair Display', Georgia, serif",
+              fontWeight: 400,
+              fontStyle: canSubmit ? "normal" : "italic",
+              letterSpacing: "0.04em",
               cursor: canSubmit ? "pointer" : "not-allowed",
               display: "flex",
               alignItems: "center",
-              gap: "0.5rem",
+              justifyContent: "center",
+              gap: "0.75rem",
             }}
           >
             {isSubmitting ? (
               <>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: "16px",
-                    height: "16px",
-                    border: "2px solid white",
-                    borderTopColor: "transparent",
-                    borderRadius: "50%",
-                    animation: "spin 0.8s linear infinite",
-                  }}
-                />
-                Processing…
+                <span style={{
+                  display: "inline-block",
+                  width: "16px",
+                  height: "16px",
+                  border: `2px solid rgba(255,255,255,0.3)`,
+                  borderTopColor: C.gold,
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+                Processing Matter…
               </>
             ) : (
-              "Run Analysis →"
+              "Begin Analysis →"
             )}
           </button>
-        </div>
 
-        {!canSubmit && !isSubmitting && (
-          <p
-            style={{
-              textAlign: "right",
-              fontFamily: "sans-serif",
+          {!canSubmit && !isSubmitting && (
+            <p style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 300,
               fontSize: "0.8125rem",
-              color: "#94a3b8",
-              marginTop: "0.5rem",
-            }}
-          >
-            {files.length === 0
-              ? "Upload at least one document to continue."
-              : "Enter buyer name and property address to continue."}
-          </p>
-        )}
+              color: C.inkLight,
+              textAlign: "center",
+              marginTop: "0.875rem",
+            }}>
+              {files.length === 0
+                ? "Upload at least one document to continue."
+                : "Enter purchaser name and property address to continue."}
+            </p>
+          )}
+        </div>
       </div>
 
-      <footer
-        style={{
-          backgroundColor: "#060e1a",
-          color: "#64748b",
-          padding: "1.5rem 2rem",
-          textAlign: "center",
-          fontFamily: "sans-serif",
-          fontSize: "0.8125rem",
-        }}
-      >
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer style={{
+        backgroundColor: C.navy,
+        borderTop: `1px solid ${C.navyLight}`,
+        padding: "2rem 3rem",
+        textAlign: "center",
+        fontFamily: "'Inter', sans-serif",
+        fontWeight: 300,
+        fontSize: "0.8125rem",
+        color: "rgba(255,255,255,0.35)",
+      }}>
         TitleWyse is an AI-assisted legal tool. All outputs require review by licensed counsel.
       </footer>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "0.8125rem",
-  fontFamily: "sans-serif",
-  fontWeight: "600",
-  color: "#374151",
-  marginBottom: "0.375rem",
+// ─── FileRow ──────────────────────────────────────────────────────────────────
+function FileRow({
+  uf,
+  onTypeChange,
+  onRemove,
+}: {
+  uf: UploadedFile;
+  onTypeChange: (id: string, t: DocType) => void;
+  onRemove: (id: string) => void;
+}) {
+  const badgeColor: Record<DocType, string> = {
+    COMMITMENT: C.navy,
+    EXCEPTION: "#4A2E00",
+    SURVEY: "#1A3A2A",
+    PLAT: "#2C1A4A",
+    OTHER: C.inkMuted,
+  };
+
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 80px 140px 60px",
+      gap: "0.75rem",
+      alignItems: "center",
+      padding: "0.75rem 0",
+      borderBottom: `1px solid ${C.parchmentDark}`,
+    }}>
+      {/* Filename */}
+      <div style={{ overflow: "hidden", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.6875rem", color: C.gold, flexShrink: 0 }}>
+          {uf.file.name.toLowerCase().endsWith(".pdf") ? "PDF" : "IMG"}
+        </span>
+        <span style={{
+          fontFamily: "'Inter', sans-serif",
+          fontWeight: 400,
+          fontSize: "0.875rem",
+          color: C.ink,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {uf.file.name}
+        </span>
+      </div>
+
+      {/* Size */}
+      <span style={{
+        fontFamily: "'DM Mono', monospace",
+        fontSize: "0.6875rem",
+        color: C.inkLight,
+        letterSpacing: "0.04em",
+      }}>
+        {(uf.file.size / 1024).toFixed(0)} KB
+      </span>
+
+      {/* Type selector */}
+      <select
+        value={uf.docType}
+        onChange={(e) => onTypeChange(uf.id, e.target.value as DocType)}
+        style={{
+          backgroundColor: badgeColor[uf.docType],
+          color: C.white,
+          border: "none",
+          padding: "4px 8px",
+          fontSize: "0.6875rem",
+          fontFamily: "'DM Mono', monospace",
+          letterSpacing: "0.08em",
+          cursor: "pointer",
+          width: "100%",
+        }}
+      >
+        <option value="COMMITMENT">COMMITMENT</option>
+        <option value="EXCEPTION">EXCEPTION</option>
+        <option value="SURVEY">SURVEY</option>
+        <option value="PLAT">PLAT</option>
+        <option value="OTHER">OTHER</option>
+      </select>
+
+      {/* Status / Remove */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {uf.status === "uploading" && (
+          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.6rem", color: C.gold, letterSpacing: "0.06em" }}>↑</span>
+        )}
+        {uf.status === "done" && (
+          <span style={{ color: "#1A4A2E", fontSize: "0.875rem" }}>✓</span>
+        )}
+        {uf.status === "error" && (
+          <span style={{ color: C.error, fontSize: "0.75rem" }}>✕</span>
+        )}
+        {uf.status === "pending" && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(uf.id); }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: C.inkLight,
+              fontSize: "0.875rem",
+              padding: "2px 6px",
+              lineHeight: 1,
+            }}
+            title="Remove"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Helper components ────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <span style={{
+        fontFamily: "'DM Mono', monospace",
+        fontSize: "0.625rem",
+        letterSpacing: "0.2em",
+        textTransform: "uppercase",
+        color: C.inkLight,
+        display: "block",
+      }}>
+        {children}
+      </span>
+      <div style={{ width: "32px", height: "1px", backgroundColor: C.gold, marginTop: "6px" }} />
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label style={{
+      display: "block",
+      fontFamily: "'DM Mono', monospace",
+      fontSize: "0.5625rem",
+      letterSpacing: "0.18em",
+      textTransform: "uppercase",
+      color: C.inkLight,
+      marginBottom: "0.5rem",
+    }}>
+      {children}
+    </label>
+  );
+}
+
+// ─── Style constants ──────────────────────────────────────────────────────────
+const cardStyle: React.CSSProperties = {
+  backgroundColor: C.white,
+  border: `1px solid ${C.border}`,
+  padding: "2.5rem",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "10px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: "6px",
+  padding: "11px 14px",
+  border: `1px solid ${C.border}`,
+  backgroundColor: C.parchment,
+  color: C.ink,
+  fontFamily: "'Inter', sans-serif",
+  fontWeight: 400,
   fontSize: "0.9375rem",
-  fontFamily: "sans-serif",
-  color: "#0f172a",
-  backgroundColor: "white",
   outline: "none",
 };
 
-const sectionHeadingStyle: React.CSSProperties = {
-  fontFamily: "sans-serif",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  fontSize: "0.8125rem",
-  fontWeight: "700",
-  color: "#0a1628",
-  borderBottom: "2px solid #c9a84c",
-  paddingBottom: "0.5rem",
-  display: "inline-block",
-};
-
 const colHeaderStyle: React.CSSProperties = {
-  fontFamily: "sans-serif",
-  fontSize: "0.75rem",
-  fontWeight: "700",
-  color: "#94a3b8",
+  fontFamily: "'DM Mono', monospace",
+  fontSize: "0.5rem",
+  letterSpacing: "0.18em",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  color: C.inkLight,
 };

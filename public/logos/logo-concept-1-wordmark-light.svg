@@ -1,0 +1,50 @@
+<!-- TitleWyse Logo Concept 1: Wordmark Serif Stack (Light Background) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="400" height="120">
+  <defs>
+    <style>
+      .c1l-bg { fill: #F8F7F4; }
+      .c1l-title {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 42px;
+        font-weight: 700;
+        fill: #0A1628;
+        letter-spacing: 0.22em;
+        text-anchor: middle;
+        dominant-baseline: auto;
+      }
+      .c1l-wyse {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 42px;
+        font-weight: 400;
+        fill: #0A1628;
+        letter-spacing: 0.22em;
+        text-anchor: middle;
+        dominant-baseline: auto;
+      }
+      .c1l-tagline {
+        font-family: 'DM Mono', 'Courier New', monospace;
+        font-size: 8.5px;
+        font-weight: 400;
+        fill: rgba(201,168,76,0.90);
+        letter-spacing: 0.24em;
+        text-anchor: middle;
+        dominant-baseline: auto;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="120" class="c1l-bg"/>
+
+  <!-- "TITLE" — bold serif, tracked -->
+  <text x="200" y="41" class="c1l-title">TITLE</text>
+
+  <!-- Gold rule -->
+  <rect x="82" y="51" width="236" height="1" fill="#C9A84C"/>
+
+  <!-- "WYSE" — regular weight serif, tracked -->
+  <text x="200" y="84" class="c1l-wyse">WYSE</text>
+
+  <!-- Tagline -->
+  <text x="200" y="108" class="c1l-tagline">AI-ASSISTED TITLE REVIEW</text>
+</svg>

@@ -1,0 +1,78 @@
+<!-- TitleWyse Logo Concept 2: Monogram + Wordmark -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" width="480" height="120">
+  <defs>
+    <style>
+      .c2-bg { fill: #0A1628; }
+      .c2-name {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 28px;
+        font-weight: 700;
+        fill: #F8F7F4;
+        letter-spacing: 0.04em;
+        dominant-baseline: auto;
+      }
+      .c2-name-light {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 28px;
+        font-weight: 400;
+        fill: #C9A84C;
+        letter-spacing: 0.04em;
+        dominant-baseline: auto;
+      }
+      .c2-tagline {
+        font-family: 'DM Mono', 'Courier New', monospace;
+        font-size: 8px;
+        font-weight: 400;
+        fill: rgba(201,168,76,0.65);
+        letter-spacing: 0.22em;
+        dominant-baseline: auto;
+      }
+      .c2-mono-T {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 62px;
+        font-weight: 700;
+        fill: #F8F7F4;
+        dominant-baseline: auto;
+      }
+      .c2-mono-W {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 52px;
+        font-weight: 400;
+        fill: #C9A84C;
+        dominant-baseline: auto;
+      }
+    </style>
+
+    <!-- Clip for the monogram circle -->
+    <clipPath id="c2-circle-clip">
+      <circle cx="52" cy="60" r="48"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="480" height="120" class="c2-bg"/>
+
+  <!-- ── Monogram Mark ── -->
+  <!-- Outer ring -->
+  <circle cx="52" cy="60" r="48" fill="none" stroke="#C9A84C" stroke-width="1.5"/>
+  <!-- Inner navy fill -->
+  <circle cx="52" cy="60" r="46" fill="#0A1628"/>
+
+  <!-- "T" — large, bold, slightly left -->
+  <text x="19" y="90" class="c2-mono-T">T</text>
+  <!-- "W" — slightly smaller, gold, overlapping right side -->
+  <text x="42" y="85" class="c2-mono-W" clip-path="url(#c2-circle-clip)">W</text>
+
+  <!-- Vertical separator -->
+  <rect x="116" y="22" width="1" height="76" fill="#C9A84C" opacity="0.35"/>
+
+  <!-- ── Wordmark Section ── -->
+  <!-- "Title" bold + "Wyse" regular -->
+  <text x="136" y="56" class="c2-name">Title<tspan class="c2-name-light">Wyse</tspan></text>
+
+  <!-- Thin gold rule under wordmark -->
+  <rect x="136" y="63" width="272" height="0.75" fill="#C9A84C" opacity="0.5"/>
+
+  <!-- Tagline -->
+  <text x="136" y="79" class="c2-tagline">AI-ASSISTED TITLE REVIEW</text>
+</svg>

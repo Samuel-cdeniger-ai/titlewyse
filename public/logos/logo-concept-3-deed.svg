@@ -1,0 +1,80 @@
+<!-- TitleWyse Logo Concept 3: Abstract Mark — The Deed -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 110" width="440" height="110">
+  <defs>
+    <style>
+      .c3-bg { fill: #0A1628; }
+      .c3-wordmark {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 26px;
+        font-weight: 700;
+        fill: #F8F7F4;
+        letter-spacing: 0.08em;
+        dominant-baseline: auto;
+      }
+      .c3-wordmark-w {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 26px;
+        font-weight: 400;
+        fill: #C9A84C;
+        letter-spacing: 0.08em;
+        dominant-baseline: auto;
+      }
+      .c3-tagline {
+        font-family: 'DM Mono', 'Courier New', monospace;
+        font-size: 8px;
+        font-weight: 400;
+        fill: rgba(201,168,76,0.65);
+        letter-spacing: 0.2em;
+        dominant-baseline: auto;
+      }
+      .c3-T {
+        font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        font-size: 36px;
+        font-weight: 700;
+        fill: #C9A84C;
+        text-anchor: middle;
+        dominant-baseline: auto;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="440" height="110" class="c3-bg"/>
+
+  <!-- ── Deed Mark ── -->
+  <!-- Main document body (rect with folded corner cut) -->
+  <!-- Document: 64 wide × 80 tall, positioned at x=18, y=15 -->
+  <!-- Folded corner: top-right 18×18 -->
+  <path d="
+    M18,15
+    L82,15
+    L82,24
+    L91,24
+    L91,95
+    L18,95
+    Z
+  " fill="#162440" stroke="#C9A84C" stroke-width="1.2"/>
+
+  <!-- Folded corner triangle (the fold itself) -->
+  <path d="M82,15 L82,24 L91,24 Z" fill="#C9A84C" opacity="0.85"/>
+
+  <!-- Horizontal lines inside deed (like ruled paper / document text) -->
+  <rect x="26" y="34" width="40" height="1" fill="#C9A84C" opacity="0.3"/>
+  <rect x="26" y="42" width="34" height="1" fill="#C9A84C" opacity="0.2"/>
+  <rect x="26" y="50" width="38" height="1" fill="#C9A84C" opacity="0.2"/>
+
+  <!-- Gold "T" centered in lower deed area -->
+  <text x="54.5" y="80" class="c3-T">T</text>
+
+  <!-- Vertical separator -->
+  <rect x="106" y="18" width="1" height="74" fill="#C9A84C" opacity="0.3"/>
+
+  <!-- ── Wordmark ── -->
+  <text x="122" y="51" class="c3-wordmark">Title<tspan class="c3-wordmark-w">Wyse</tspan></text>
+
+  <!-- Thin gold rule -->
+  <rect x="122" y="58" width="270" height="0.75" fill="#C9A84C" opacity="0.45"/>
+
+  <!-- Tagline -->
+  <text x="122" y="73" class="c3-tagline">AI-ASSISTED TITLE REVIEW</text>
+</svg>
