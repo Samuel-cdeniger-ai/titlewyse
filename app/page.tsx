@@ -31,11 +31,23 @@ export default function LandingPage() {
         borderBottom: `1px solid ${C.navyLight}`,
       }}>
         {/* SVG Logo — Concept 4: Compass/Survey */}
-        <img
-          src="/logo-primary.svg"
-          alt="TitleWyse"
-          style={{ height: "48px", width: "auto", display: "block" }}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
+          <img
+            src="/logo-primary.svg"
+            alt="TitleWyse"
+            style={{ height: "48px", width: "auto", display: "block" }}
+          />
+          <Link href="/matters" style={{
+            color: "rgba(255,255,255,0.6)",
+            textDecoration: "none",
+            fontSize: "0.8rem",
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 400,
+            letterSpacing: "0.02em",
+          }}>
+            All Matters
+          </Link>
+        </div>
         <Link href="/review/new" style={{
           color: C.gold,
           border: `1px solid ${C.gold}`,

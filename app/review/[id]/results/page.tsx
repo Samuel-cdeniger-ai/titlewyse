@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-
-const API_BASE = "https://soo-courtliest-stetson.ngrok-free.dev";
+import { getAnalysis, generateDocuments, downloadUrl, API_BASE } from "@/lib/api";
 
 // ─── Pre-loaded files for demo analysis ID ────────────────────────────────────
 const DEMO_ANALYSIS_ID = "e5146cbf-3f9f-4550-a929-b6c6091b7440";
@@ -318,51 +317,25 @@ export default function ResultsPage() {
           setOutputFiles(DEMO_FILES);
         }
 
-        // 3. Try the primary analyses endpoint (real data)
-        const analysesRes = await fetch(`${API_BASE}/analyses/${reviewId}`);
-        if (analysesRes.ok) {
-          const data = await analysesRes.json();
+        // 3. Load analysis data
+        try {
+          const data = await getAnalysis(reviewId);
           setResults((prev) => ({ ...(prev || {}), ...data }));
           setNotFound(false);
 
-          // 4. Try to call /generate to get document file paths
-          // (non-fatal if it fails — demo files are already pre-loaded above)
+          // 4. Generate output documents (non-fatal)
           try {
-            const genRes = await fetch(`${API_BASE}/generate`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ analysis_id: reviewId }),
-            });
-            if (genRes.ok) {
-              const genData = await genRes.json();
-              // genData may have { files: { objection_letter_docx: "/download/...", ... } }
-              const files = genData?.files || genData?.output_files || {};
-              if (Object.keys(files).length > 0) {
-                setOutputFiles(files);
-              }
-            }
+            const genData = await generateDocuments(reviewId);
+            const files = genData?.files || {};
+            if (Object.keys(files).length > 0) setOutputFiles(files);
           } catch { /* non-fatal — use pre-loaded demo files */ }
 
-        } else if (analysesRes.status === 404) {
-          // Fallback: try the documents endpoint
-          try {
-            const docRes = await fetch(`${API_BASE}/documents/${reviewId}`);
-            if (docRes.ok) {
-              const data = await docRes.json();
-              setResults((prev) => ({ ...(prev || {}), ...data }));
-              setNotFound(false);
-            } else {
-              const hasSessionData =
-                typeof window !== "undefined" &&
-                (sessionStorage.getItem(`results_${reviewId}`) || sessionStorage.getItem(`review_${reviewId}`));
-              if (!hasSessionData) setNotFound(true);
-            }
-          } catch {
-            const hasSessionData =
-              typeof window !== "undefined" &&
-              (sessionStorage.getItem(`results_${reviewId}`) || sessionStorage.getItem(`review_${reviewId}`));
-            if (!hasSessionData) setNotFound(true);
-          }
+        } catch {
+          // Analysis not found — check session storage before showing 404
+          const hasSessionData =
+            typeof window !== "undefined" &&
+            (sessionStorage.getItem(`results_${reviewId}`) || sessionStorage.getItem(`review_${reviewId}`));
+          if (!hasSessionData) setNotFound(true);
         }
       } catch {
         // non-fatal — we may have session storage data
@@ -557,7 +530,7 @@ export default function ResultsPage() {
     if (filePath.startsWith("http")) return filePath;
     // Extract filename from path like "/download/filename.docx"
     const filename = filePath.split("/").pop() || filePath;
-    return `${API_BASE}/download/${encodeURIComponent(filename)}`;
+    return downloadUrl(filename);
   };
 
   const hasOutputFiles = Object.values(outputFiles).some(Boolean);

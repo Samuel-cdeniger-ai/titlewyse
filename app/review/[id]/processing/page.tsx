@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-
-const API_BASE = "https://soo-courtliest-stetson.ngrok-free.dev";
+import { getJobStatus, getAnalysis, generateDocuments, API_BASE } from "@/lib/api";
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -23,20 +22,39 @@ const C = {
   errorBg:       "rgba(139,32,32,0.06)",
 };
 
-// ─── Steps ────────────────────────────────────────────────────────────────────
+// ─── Step definitions ─────────────────────────────────────────────────────────
+// Maps backend status values → ordered display steps
 const STEPS = [
-  { key: "uploading",   label: "Uploading Documents",    desc: "Transferring files to the analysis engine." },
-  { key: "extracting",  label: "Extracting Text",         desc: "Reading and processing document content." },
-  { key: "analyzing",   label: "Running Title Analysis",  desc: "Applying Texas title law and TLTA standards." },
-  { key: "generating",  label: "Generating Documents",    desc: "Producing objection letter and issues summary." },
+  { key: "extracting",  label: "Extracting Text from PDFs",    desc: "Reading and processing document content." },
+  { key: "classifying", label: "Classifying Document Types",   desc: "Identifying commitment, exceptions, and survey." },
+  { key: "analyzing",   label: "Running AI Title Analysis",    desc: "Applying Texas title law and TLTA standards." },
+  { key: "generating",  label: "Generating Output Documents",  desc: "Producing objection letter and issues summary." },
 ];
+
+const STATUS_ORDER = ["queued", "extracting", "classifying", "analyzing", "generating", "complete", "error"];
+
+function getStepIndex(status: string): number {
+  const map: Record<string, number> = {
+    queued: 0,
+    extracting: 0,
+    classifying: 1,
+    analyzing: 2,
+    generating: 3,
+    complete: 4,
+    error: -1,
+  };
+  return map[status] ?? 0;
+}
 
 type StepStatus = "pending" | "active" | "done" | "error";
 
-function getStepStates(currentStep: number): StepStatus[] {
-  return STEPS.map((_, i) =>
-    i < currentStep ? "done" : i === currentStep ? "active" : "pending"
-  );
+function getStepStates(activeIndex: number, isError: boolean): StepStatus[] {
+  return STEPS.map((_, i) => {
+    if (isError) return i < activeIndex ? "done" : "pending";
+    if (i < activeIndex) return "done";
+    if (i === activeIndex) return "active";
+    return "pending";
+  });
 }
 
 // ─── Wordmark ─────────────────────────────────────────────────────────────────
@@ -53,106 +71,147 @@ function Wordmark() {
   );
 }
 
+function formatElapsed(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function ProcessingPage() {
   const params = useParams();
   const router = useRouter();
-  const reviewId = params.id as string;
+  const jobId = params.id as string;
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const [jobStatus, setJobStatus] = useState<string>("queued");
+  const [jobStage, setJobStage] = useState<string>("Queued for analysis");
+  const [jobPct, setJobPct] = useState<number>(5);
+  const [errorMsg, setErrorMsg] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState("");
   const [matterRef, setMatterRef] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
-  const estimatedTotal = 45;
+  const cancelledRef = useRef(false);
 
+  // Load matter ref from session storage
   useEffect(() => {
-    // Load matter ref from session storage
     if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem(`review_${reviewId}`);
+      const stored = sessionStorage.getItem(`review_${jobId}`);
       if (stored) {
-        const info = JSON.parse(stored);
-        if (info.matterRef) setMatterRef(info.matterRef);
+        try {
+          const info = JSON.parse(stored);
+          if (info.matterRef) setMatterRef(info.matterRef);
+          // If backend was legacy sync and already gave us analysisId, check immediately
+          if (info.analysisId) {
+            setJobStatus("complete");
+            setJobStage("Analysis complete");
+            setJobPct(100);
+          }
+        } catch { /* ignore */ }
       }
     }
-  }, [reviewId]);
+  }, [jobId]);
 
-  // Elapsed timer — drives visual step progression
+  // Elapsed timer
   useEffect(() => {
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Visual step advancement based on elapsed time
+  // Poll /jobs/{jobId} every 2 seconds for real status
   useEffect(() => {
-    if (redirecting) return;
-    const stepTimings = [0, 5, 12, 22];
-    if (elapsed >= stepTimings[3] && currentStep < 3) setCurrentStep(3);
-    else if (elapsed >= stepTimings[2] && currentStep < 2) setCurrentStep(2);
-    else if (elapsed >= stepTimings[1] && currentStep < 1) setCurrentStep(1);
-  }, [elapsed, currentStep, redirecting]);
+    if (redirecting || errorMsg) return;
+    cancelledRef.current = false;
 
-  // Poll backend every 3 seconds for analysis status
-  useEffect(() => {
-    if (redirecting) return;
-    let cancelled = false;
-
-    const checkStatus = async () => {
+    const pollJob = async () => {
       try {
-        const res = await fetch(`${API_BASE}/analyses/${reviewId}`);
-        if (res.ok) {
-          const data = await res.json();
-          // Analysis complete — check if it has output files / full data
-          const hasResults =
-            data.analysis_id || data.output_files || data.analysis || data.risk_summary;
-          if (hasResults && !cancelled) {
-            setRedirecting(true);
-            setCurrentStep(STEPS.length - 1);
-            // Store results in session storage for the results page
-            if (typeof window !== "undefined") {
-              sessionStorage.setItem(`results_${reviewId}`, JSON.stringify(data));
-            }
-            // If output files not yet generated, trigger generation
-            if (!data.output_files || !Object.values(data.output_files).some(Boolean)) {
-              try {
-                const genRes = await fetch(`${API_BASE}/generate`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ analysis_id: reviewId }),
-                });
-                if (genRes.ok) {
-                  const genData = await genRes.json();
-                  if (typeof window !== "undefined") {
-                    sessionStorage.setItem(`results_${reviewId}`, JSON.stringify(genData));
-                  }
-                }
-              } catch { /* non-fatal — results page will handle missing files */ }
-            }
-            setTimeout(() => {
-              if (!cancelled) router.push(`/review/${reviewId}/results`);
-            }, 800);
-          }
+        const data = await getJobStatus(jobId);
+        if (cancelledRef.current) return;
+
+        setJobStatus(data.status);
+        setJobStage(data.stage || data.status);
+        setJobPct(data.pct ?? 0);
+
+        if (data.status === "complete" && data.analysis_id) {
+          await handleComplete(data.analysis_id, data);
+        } else if (data.status === "error") {
+          setErrorMsg(data.error || data.stage || "Analysis failed. Please try again.");
         }
-        // 404 = still processing — visual progression handles it
-      } catch { /* non-fatal polling error */ }
+      } catch (err: unknown) {
+        // 404 = job not found, try legacy analysis endpoint
+        if (err instanceof Error && err.message.includes("not found")) {
+          await pollLegacy();
+        }
+        // other errors: keep retrying silently
+      }
     };
 
-    const interval = setInterval(checkStatus, 3000);
-    // Also check immediately on mount
-    checkStatus();
+    const pollLegacy = async () => {
+      try {
+        const data = await getAnalysis(jobId);
+        const hasResults = data.analysis_id || data.output_files || data.analysis || data.risk_summary;
+        if (hasResults && !cancelledRef.current) {
+          await handleComplete(jobId, data);
+        }
+      } catch { /* non-fatal */ }
+    };
+
+    const handleComplete = async (analysisId: string, resultData: any) => {
+      if (cancelledRef.current) return;
+      setRedirecting(true);
+      setJobStatus("complete");
+      setJobStage("Analysis complete");
+      setJobPct(100);
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(`results_${analysisId}`, JSON.stringify(resultData));
+        // Update session storage with resolved analysis_id
+        const reviewData = sessionStorage.getItem(`review_${jobId}`);
+        if (reviewData) {
+          try {
+            const parsed = JSON.parse(reviewData);
+            parsed.analysisId = analysisId;
+            sessionStorage.setItem(`review_${analysisId}`, JSON.stringify(parsed));
+          } catch { /* ignore */ }
+        }
+      }
+
+      // If output files not yet generated, trigger generation
+      if (!resultData.output_files || !Object.values(resultData.output_files || {}).some(Boolean)) {
+        try {
+          const genData = await generateDocuments(analysisId);
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`results_${analysisId}`, JSON.stringify(genData));
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      setTimeout(() => {
+        if (!cancelledRef.current) router.push(`/review/${analysisId}/results`);
+      }, 800);
+    };
+
+    // Poll immediately then every 2 seconds
+    pollJob();
+    const interval = setInterval(pollJob, 2000);
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       clearInterval(interval);
     };
-  }, [reviewId, router, redirecting]);
+  }, [jobId, router, redirecting, errorMsg]);
 
-  const stepStates = getStepStates(currentStep);
-  const progressPct = Math.min(97, (elapsed / estimatedTotal) * 100);
-  const displayId = matterRef || reviewId;
+  const stepIndex = getStepIndex(jobStatus);
+  const stepStates = getStepStates(stepIndex, jobStatus === "error");
+
+  // Progress bar: use real pct from backend, cap at 97 until complete
+  const progressPct = jobStatus === "complete" ? 100 : Math.min(97, jobPct);
+
+  const displayId = matterRef || jobId.slice(0, 8).toUpperCase();
+  const showReassurance = elapsed >= 30 && jobStatus !== "complete" && jobStatus !== "error";
+  const showTimeout = elapsed >= 180 && jobStatus !== "complete" && jobStatus !== "error";
 
   // ── Error state ────────────────────────────────────────────────────────────
-  if (error) {
+  if (errorMsg) {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: C.parchment }}>
         <nav style={navStyle}><Wordmark /></nav>
@@ -182,7 +241,7 @@ export default function ProcessingPage() {
             marginBottom: "2rem",
             lineHeight: 1.7,
           }}>
-            {error}
+            {errorMsg}
           </p>
           <Link href="/review/new" style={{
             display: "inline-block",
@@ -255,6 +314,17 @@ export default function ProcessingPage() {
           margin: "1.75rem auto",
         }} />
 
+        {/* Elapsed timer */}
+        <p style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: "0.6875rem",
+          letterSpacing: "0.14em",
+          color: C.inkLight,
+          marginBottom: "1.5rem",
+        }}>
+          Elapsed: {formatElapsed(elapsed)}
+        </p>
+
         {/* Progress bar */}
         <div style={{
           height: "2px",
@@ -274,6 +344,8 @@ export default function ProcessingPage() {
         <div style={{ textAlign: "left" }}>
           {STEPS.map((step, i) => {
             const status = stepStates[i];
+            // Use the real backend stage label for the active step
+            const label = (status === "active") ? jobStage : step.label;
             return (
               <div
                 key={step.key}
@@ -320,7 +392,7 @@ export default function ProcessingPage() {
                     color: status === "done" ? C.gold : status === "active" ? C.navy : C.inkLight,
                     fontWeight: status === "active" ? 500 : 300,
                   }}>
-                    {step.label}
+                    {label}
                   </span>
                 </div>
 
@@ -365,19 +437,68 @@ export default function ProcessingPage() {
           })}
         </div>
 
-        {/* Estimated time note */}
-        <p style={{
-          fontFamily: "'Inter', sans-serif",
-          fontWeight: 300,
-          fontStyle: "italic",
-          fontSize: "0.8125rem",
-          color: C.inkLight,
-          marginTop: "3rem",
-          lineHeight: 1.7,
-        }}>
-          Title analysis typically completes in 30–60 seconds.<br />
-          Do not close this page.
-        </p>
+        {/* Timeout message (3+ minutes) */}
+        {showTimeout && (
+          <div style={{
+            marginTop: "2.5rem",
+            padding: "1.25rem 1.5rem",
+            border: `1px solid ${C.border}`,
+            backgroundColor: C.white,
+            textAlign: "left",
+          }}>
+            <p style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 400,
+              fontSize: "0.875rem",
+              color: C.inkMuted,
+              lineHeight: 1.7,
+              marginBottom: "0.75rem",
+            }}>
+              Taking longer than expected. The analysis is still running — you can wait or come back later.
+            </p>
+            <p style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: "0.625rem",
+              letterSpacing: "0.1em",
+              color: C.inkLight,
+              textTransform: "uppercase",
+            }}>
+              Job ID: {jobId}
+            </p>
+          </div>
+        )}
+
+        {/* Reassurance message (30s–3min) */}
+        {showReassurance && !showTimeout && (
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 300,
+            fontStyle: "italic",
+            fontSize: "0.8125rem",
+            color: C.inkLight,
+            marginTop: "2.5rem",
+            lineHeight: 1.7,
+            padding: "0 1rem",
+          }}>
+            This is normal for large documents — Claude is reading every exception carefully.
+          </p>
+        )}
+
+        {/* Standard note (under 30s) */}
+        {!showReassurance && !showTimeout && (
+          <p style={{
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 300,
+            fontStyle: "italic",
+            fontSize: "0.8125rem",
+            color: C.inkLight,
+            marginTop: "3rem",
+            lineHeight: 1.7,
+          }}>
+            Title analysis typically completes in 30–90 seconds.<br />
+            Do not close this page.
+          </p>
+        )}
       </div>
 
       <style>{`

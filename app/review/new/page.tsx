@@ -3,8 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-const API_BASE = "https://soo-courtliest-stetson.ngrok-free.dev";
+import { uploadDocument, startAnalysis } from "@/lib/api";
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -134,45 +133,40 @@ export default function NewMatterPage() {
 
         setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "uploading" } : f)));
 
-        const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-        if (!res.ok) {
-          const err = await res.text();
-          setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "error", error: err } : f)));
-          throw new Error(`Upload failed for ${uf.file.name}: ${err}`);
+        try {
+          const data = await uploadDocument(uf.file, docTypeApiMap[uf.docType]);
+          uploadedIds.push(data.document_id);
+          setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "done", uploadedId: data.document_id } : f)));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "error", error: msg } : f)));
+          throw err;
         }
-
-        const data = await res.json();
-        uploadedIds.push(data.document_id || data.id || data.document?.id);
-        setFiles((prev) => prev.map((f) => (f.id === uf.id ? { ...f, status: "done", uploadedId: data.document_id || data.id } : f)));
       }
 
-      const analyzeRes = await fetch(`${API_BASE}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          document_ids: uploadedIds.filter(Boolean),
-          buyer_name: buyerName,
-          property_address: propertyAddress,
-          intended_use: intendedUse,
-        }),
+      const analyzeData = await startAnalysis({
+        document_ids: uploadedIds.filter(Boolean),
+        buyer_name: buyerName,
+        property_address: propertyAddress,
+        intended_use: intendedUse,
+        matter_ref: matterRef,
       });
 
-      if (!analyzeRes.ok) throw new Error(`Analysis request failed: ${analyzeRes.statusText}`);
-
-      const analyzeData = await analyzeRes.json();
-      const reviewId = analyzeData.analysis_id || analyzeData.review_id || analyzeData.id || analyzeData.job_id || uploadedIds[0];
+      const jobId = analyzeData.job_id;
 
       if (typeof window !== "undefined") {
-        sessionStorage.setItem(`review_${reviewId}`, JSON.stringify({
+        sessionStorage.setItem(`review_${jobId}`, JSON.stringify({
           buyerName,
           propertyAddress,
           intendedUse,
           matterRef,
           documentIds: uploadedIds.filter(Boolean),
+          // If backend returned analysis_id synchronously (legacy), store it
+          analysisId: null,
         }));
       }
 
-      router.push(`/review/${reviewId}/processing`);
+      router.push(`/review/${jobId}/processing`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err));
       setIsSubmitting(false);
@@ -195,15 +189,26 @@ export default function NewMatterPage() {
         borderBottom: `1px solid ${C.navyLight}`,
       }}>
         <Wordmark />
-        <span style={{
-          fontFamily: "'DM Mono', monospace",
-          fontSize: "0.6875rem",
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: "rgba(201,168,76,0.55)",
-        }}>
-          New Matter
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+          <Link href="/matters" style={{
+            fontFamily: "'Inter', sans-serif",
+            fontSize: "0.8rem",
+            letterSpacing: "0.02em",
+            color: "rgba(201,168,76,0.7)",
+            textDecoration: "none",
+          }}>
+            All Matters
+          </Link>
+          <span style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: "0.6875rem",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "rgba(201,168,76,0.55)",
+          }}>
+            New Matter
+          </span>
+        </div>
       </nav>
 
       <div style={{ maxWidth: "820px", margin: "0 auto", padding: "4rem 2rem 6rem" }}>
