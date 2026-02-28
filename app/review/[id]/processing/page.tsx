@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 
-const API_BASE = "http://localhost:8001";
+const API_BASE = "https://soo-courtliest-stetson.ngrok-free.dev";
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
-const API_BASE = "http://localhost:8001";
+const API_BASE = "https://soo-courtliest-stetson.ngrok-free.dev";
 
 // ─── Pre-loaded files for demo analysis ID ────────────────────────────────────
 const DEMO_ANALYSIS_ID = "e5146cbf-3f9f-4550-a929-b6c6091b7440";
